@@ -17,12 +17,11 @@ from src.commands.command_zip import ZipCommand
 from src.commands.command_tar import TarCommand
 from src.commands.command_zip import UnzipCommand
 from src.commands.command_tar import UntarCommand
+from src.commands.command_grep import GrepCommand
 
 class TestShellCommands(TestCase):
-    """Тесты для команд shell используя TestCase из pyfakefs"""
 
     def setUp(self):
-        """Настройка перед каждым тестом"""
         self.setUpPyfakefs()
         self.logger = Mock()
 
@@ -33,11 +32,10 @@ class TestShellCommands(TestCase):
         self.fs.create_dir('/home/user/documents')
 
     def normalize_path(self, path):
-        """Нормализует путь для сравнения (заменяет обратные слеши на прямые)"""
         return path.replace('\\', '/')
 
     def capture_output(self, func, *args):
-        """Захватывает вывод stdout"""
+        '''вывод stdout'''
         old_stdout = sys.stdout
         sys.stdout = StringIO()
         try:
@@ -47,7 +45,7 @@ class TestShellCommands(TestCase):
             sys.stdout = old_stdout
 
     def test_ls_command(self):
-        """Тест команды ls"""
+        '''тест ls'''
         ls_cmd = LSCommand(self.logger)
 
         # Простой ls
@@ -62,7 +60,7 @@ class TestShellCommands(TestCase):
 
 
     def test_cd_command(self):
-        """Тест команды cd"""
+        '''Тест cd'''
         cd_cmd = CDCommand(self.logger)
         original_cwd = os.getcwd()
 
@@ -85,7 +83,7 @@ class TestShellCommands(TestCase):
             os.chdir(original_cwd)
 
     def test_cat_command(self):
-        """Тест команды cat"""
+        '''Тест cat'''
         cat_cmd = CATCommand(self.logger)
 
         # Чтение существующего файла
@@ -101,7 +99,7 @@ class TestShellCommands(TestCase):
         self.assertIn('Is a directory', output)
 
     def test_cp_command(self):
-        """Тест команды cp"""
+        '''Тест cp'''
         cp_cmd = CPCommand(self.logger)
 
         # Копирование файла
@@ -119,7 +117,7 @@ class TestShellCommands(TestCase):
         self.assertIn('omitting directory', output)
 
     def test_rm_command(self):
-        """Тест команды rm"""
+        '''Тест rm'''
         rm_cmd = RMCommand(self.logger)
 
         # Удаление файла
@@ -136,7 +134,7 @@ class TestShellCommands(TestCase):
         self.assertIn("rm: remove directory 'C:\\test' recursively? (y/n)", output)
 
     def test_mv_command(self):
-        """Тест команды mv"""
+        '''Тест mv'''
         mv_cmd = MVCommand(self.logger)
 
         # Перемещение файла
@@ -155,7 +153,7 @@ class TestShellCommands(TestCase):
         self.assertIn('cannot stat', output)
 
     def test_zip_command(self):
-        """Тест команды zip"""
+        '''Тест zip'''
         zip_cmd = ZipCommand(self.logger)
 
         # Создание архива
@@ -164,7 +162,7 @@ class TestShellCommands(TestCase):
         self.assertTrue(os.path.exists('/archive.zip'))
 
     def test_unzip_command(self):
-        """Тест команды unzip"""
+        '''тест unzip'''
         unzip_cmd = UnzipCommand(self.logger)
 
         # Распаковка несуществующего архива
@@ -172,7 +170,7 @@ class TestShellCommands(TestCase):
         self.assertIn('cannot open', output)
 
     def test_tar_command(self):
-        """Тест команды tar"""
+        '''тест tar'''
         tar_cmd = TarCommand(self.logger)
 
         # Создание tar архива
@@ -180,11 +178,47 @@ class TestShellCommands(TestCase):
         self.assertIn('Created tar archive', output)
 
     def test_untar_command(self):
-        """Тест команды untar"""
+        '''тест untar'''
         untar_cmd = UntarCommand(self.logger)
 
         output = self.capture_output(untar_cmd.execute, ['/nonexistent.tar.gz'])
         self.assertIn('cannot open', output)
+
+    def test_grep_command(self):
+        '''тест grep'''
+        grep_cmd = GrepCommand(self.logger)
+
+        # Поиск в существующем файле с найденным шаблоном
+        output = self.capture_output(grep_cmd.execute, ['World', '/test/file1.txt'])
+        self.assertEqual(output.strip(), 'test\\file1.txt:1:Hello World!')
+
+        # Поиск в существующем файле без найденного шаблона
+        output = self.capture_output(grep_cmd.execute, ['NotFound', '/test/file1.txt'])
+        self.assertEqual(output.strip(), 'No matches found')
+
+        # Поиск в несуществующем файле
+        output = self.capture_output(grep_cmd.execute, ['pattern', '/nonexistent.txt'])
+        self.assertIn('No such file', output)
+
+        # Поиск в директории вместо файла
+        output = self.capture_output(grep_cmd.execute, ['pattern', '/test/subdir'])
+        self.assertIn('Is a directory', output)
+
+        # Поиск без указания файла
+        output = self.capture_output(grep_cmd.execute, ['pattern'])
+        self.assertIn('grep: missing operands\nUsage: grep [-r] [-i] <pattern> <path>\n', output)
+
+        # Поиск без указания шаблона
+        output = self.capture_output(grep_cmd.execute, [])
+        self.assertIn('grep: missing operands\nUsage: grep [-r] [-i] <pattern> <path>\n', output)
+
+        # Рекурсивный поиск в директории
+        output = self.capture_output(grep_cmd.execute, ['-r', 'content', '/test'])
+        self.assertIn(output.strip(), 'test\\file2.txt:1:Test content')
+
+        # Поиск с игнорированием регистра
+        output = self.capture_output(grep_cmd.execute, ['-i', 'hello', '/test/file1.txt'])
+        self.assertEqual(output.strip(), 'test\\file1.txt:1:Hello World!')
 
     def test_cat_command_errors(self):
         # cat без аргументов
